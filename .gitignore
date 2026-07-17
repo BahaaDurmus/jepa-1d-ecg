@@ -1,0 +1,26 @@
+# Checkpoints & Weights
+checkpoints/
+*.pt
+*.pth
+
+# Large Datasets
+mimic_small/
+ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.1/
+ludb/
+
+# PDFs & Figures
+*.pdf
+*.png
+vjepa.png
+
+# Python & System
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.idea/
+.vscode/
+
+# Local logs
+*.log
+labels_output.txt
