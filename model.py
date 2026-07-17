@@ -106,7 +106,38 @@ class Predictor1D(nn.Module):
         pred_x = x[:, -N_tgt:]
         return self.out_proj(pred_x)
 
-# 6. JEPA 1D
+# 6. SIGReg Loss
+class SIGRegLoss(nn.Module):
+    def __init__(self, embedding_dim, num_slices=128, num_t=17, t_max=5.0, min_batch_size=4):
+        super().__init__()
+        self.embedding_dim = embedding_dim
+        self.num_slices = num_slices
+        self.num_t = num_t
+        self.t_max = t_max
+        self.min_batch_size = min_batch_size
+        
+    def forward(self, z):
+        if z.ndim != 2:
+            return torch.zeros((), device=z.device)
+        if z.size(0) < self.min_batch_size:
+            return z.sum() * 0.0
+            
+        z_float = z.float()
+        raw = torch.randn(self.embedding_dim, self.num_slices, device=z.device, dtype=torch.float32)
+        directions = raw / raw.norm(dim=0, keepdim=True).clamp(min=1e-12)
+        
+        projected = z_float @ directions
+        t_grid = torch.linspace(-self.t_max, self.t_max, self.num_t, device=z.device, dtype=torch.float32)
+        
+        phase = projected.unsqueeze(-1) * t_grid.view(1, 1, -1)
+        real_phi = torch.cos(phase).mean(dim=0)
+        imag_phi = torch.sin(phase).mean(dim=0)
+        
+        normal_phi = torch.exp(-0.5 * t_grid.square()).view(1, -1)
+        loss = (real_phi - normal_phi).square() + imag_phi.square()
+        return loss.mean().to(dtype=z.dtype)
+
+# 7. JEPA 1D
 class JEPA_1D(nn.Module):
     def __init__(self, seq_len=5000, in_chans=12, patch_size=300, embed_dim=128):
         super().__init__()
@@ -116,6 +147,7 @@ class JEPA_1D(nn.Module):
         for p in self.target_encoder.parameters():
             p.requires_grad = False
         self.predictor = Predictor1D(embed_dim, pred_dim=embed_dim // 2, num_patches=self.context_encoder.num_patches)
+        self.sigreg_loss = SIGRegLoss(embedding_dim=embed_dim)
 
     @torch.no_grad()
     def update_target_encoder(self, m=0.996):
@@ -131,5 +163,13 @@ class JEPA_1D(nn.Module):
             target_reps = F.layer_norm(target_reps, (D,))
         ctx_reps = self.context_encoder(x, mask_indices=ctx_indices)
         preds = self.predictor(ctx_reps, ctx_indices, tgt_indices)
-        loss = F.smooth_l1_loss(preds, target_reps)
-        return loss, preds, target_reps
+        
+        loss_pred = F.smooth_l1_loss(preds, target_reps)
+        
+        # SIGReg Loss to regularize target reps and predictions
+        loss_sig_tgt = self.sigreg_loss(target_reps.reshape(-1, D))
+        loss_sig_pred = self.sigreg_loss(preds.reshape(-1, D))
+        loss_sig = 0.5 * (loss_sig_tgt + loss_sig_pred)
+        
+        total_loss = loss_pred + 0.1 * loss_sig
+        return total_loss, preds, target_reps

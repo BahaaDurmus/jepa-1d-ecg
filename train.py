@@ -30,7 +30,7 @@ print(f"Train: {len(train_ds)} kayit | Test: {len(test_ds)} kayit")
 print(f"Batch boyutu: {BATCH_SIZE} | Epoch: {EPOCHS}")
 
 # --- Model ---
-model = JEPA_1D(seq_len=5000, in_chans=12, patch_size=300, embed_dim=128).to(DEVICE)
+model = JEPA_1D(seq_len=5000, in_chans=12, patch_size=100, embed_dim=128).to(DEVICE)
 
 # Sadece context_encoder + predictor egitilir, target_encoder EMA ile guncellenir
 optimizer = torch.optim.AdamW(

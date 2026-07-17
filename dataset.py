@@ -83,14 +83,13 @@ class MIMICDataset(Dataset):
 def jepa_collate_fn(batch):
     x = torch.stack(batch, dim=0)
     B = x.shape[0]
-    total_patches = 5000 // 300
+    total_patches = 5000 // 100
 
-    tgt_len = random.choice([3, 4])
+    tgt_len = random.choice(range(15, 21))  # 15-20 target patches (30%-40% mask ratio)
     start_idx = random.randint(0, total_patches - tgt_len)
     tgt_idx = torch.arange(start_idx, start_idx + tgt_len).unsqueeze(0).repeat(B, 1)
 
     avail_ctx = [i for i in range(total_patches) if i < start_idx or i >= start_idx + tgt_len]
-    random.shuffle(avail_ctx)
     ctx_idx = torch.tensor(sorted(avail_ctx)).unsqueeze(0).repeat(B, 1)
 
     return x, ctx_idx, tgt_idx
